@@ -6,14 +6,16 @@ export default function Layout() {
   const sidebarOpen = useStore((s) => s.sidebarOpen)
 
   return (
-    <div className="flex h-full">
+    <div style={{ display: 'flex', height: '100%' }}>
       <Sidebar />
-      <main
-        className={`flex-1 overflow-y-auto transition-all duration-300 ${
-          sidebarOpen ? 'ml-56' : 'ml-16'
-        }`}
-      >
-        <div className="p-6 max-w-[1600px] mx-auto">
+      <main style={{
+        flex: 1,
+        marginLeft: sidebarOpen ? 220 : 56,
+        overflowY: 'auto',
+        transition: 'margin-left 250ms ease',
+        minHeight: '100%',
+      }}>
+        <div style={{ maxWidth: 1400, margin: '0 auto', padding: '28px 28px' }}>
           <Outlet />
         </div>
       </main>

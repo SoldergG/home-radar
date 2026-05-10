@@ -1,6 +1,13 @@
 import { useRef, useEffect, useCallback } from 'react'
 import type { Device } from '../../types'
-import { getStatusColor } from '../../utils/helpers'
+
+// Canvas API needs concrete hex values — no CSS vars
+const STATUS_COLOR: Record<string, string> = {
+  online:  '#22c55e',
+  away:    '#fbbf24',
+  offline: '#f87171',
+}
+function statusColor(s: string) { return STATUS_COLOR[s] ?? '#64748b' }
 
 interface RadarCanvasProps {
   devices: Device[]
@@ -119,7 +126,7 @@ export default function RadarCanvas({ devices, size = 500, selectedDevice, onDev
       const onlineDevices = devices.filter((d) => d.type !== 'router')
       for (const device of onlineDevices) {
         const pos = getDevicePos(device, cx, cy, radius)
-        const color = getStatusColor(device.status)
+        const color = statusColor(device.status)
         const isSelected = selectedDevice === device.id
         const isHovered = hoveredDevice.current === device.id
 

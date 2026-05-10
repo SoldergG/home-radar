@@ -1,205 +1,152 @@
 import { useState } from 'react'
-import { Gauge, Play, ArrowDownToLine, ArrowUpFromLine, Clock, Server } from 'lucide-react'
+import { Gauge, Play, ArrowDownToLine, ArrowUpFromLine, Clock } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { useStore } from '../hooks/useStore'
 import { formatSpeed } from '../utils/helpers'
+
+const chartStyle = { background: 'var(--color-card)', border: '1px solid var(--color-border)', borderRadius: 8, fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--color-text)' }
 
 export default function SpeedTestPage() {
   const { speedTests, addSpeedTest } = useStore()
   const [running, setRunning] = useState(false)
   const [phase, setPhase] = useState<'idle' | 'ping' | 'download' | 'upload' | 'done'>('idle')
   const [progress, setProgress] = useState(0)
-  const [currentResult, setCurrentResult] = useState<{
-    ping: number; download: number; upload: number
-  } | null>(null)
+  const [result, setResult] = useState<{ ping: number; download: number; upload: number } | null>(null)
 
   const runTest = () => {
     if (running) return
-    setRunning(true)
-    setCurrentResult(null)
-    setProgress(0)
-
+    setRunning(true); setResult(null); setProgress(0)
     const ping = Math.floor(Math.random() * 15 + 8)
     const download = Math.floor(Math.random() * 80 + 180)
     const upload = Math.floor(Math.random() * 30 + 80)
-
     setPhase('ping')
     let p = 0
-
-    const interval = setInterval(() => {
-      p += 2
-      setProgress(p)
-
-      if (p === 20) {
-        setPhase('download')
-        setCurrentResult({ ping, download: 0, upload: 0 })
-      } else if (p === 60) {
-        setPhase('upload')
-        setCurrentResult({ ping, download, upload: 0 })
-      } else if (p >= 100) {
-        clearInterval(interval)
-        setPhase('done')
-        setCurrentResult({ ping, download, upload })
-        setRunning(false)
-
-        addSpeedTest({
-          id: `s${Date.now()}`,
-          download,
-          upload,
-          ping,
-          timestamp: new Date().toISOString(),
-          server: 'Lisboa - MEO',
-        })
-      }
-
-      if (p > 20 && p < 60) {
-        setCurrentResult((prev) => prev ? {
-          ...prev,
-          download: Math.floor(download * ((p - 20) / 40)),
-        } : null)
-      }
-      if (p > 60 && p < 100) {
-        setCurrentResult((prev) => prev ? {
-          ...prev,
-          upload: Math.floor(upload * ((p - 60) / 40)),
-        } : null)
+    const iv = setInterval(() => {
+      p += 2; setProgress(p)
+      if (p === 20) { setPhase('download'); setResult({ ping, download: 0, upload: 0 }) }
+      if (p === 60) { setPhase('upload'); setResult({ ping, download, upload: 0 }) }
+      if (p > 20 && p < 60) setResult((r) => r ? { ...r, download: Math.floor(download * ((p - 20) / 40)) } : r)
+      if (p > 60 && p < 100) setResult((r) => r ? { ...r, upload: Math.floor(upload * ((p - 60) / 40)) } : r)
+      if (p >= 100) {
+        clearInterval(iv); setPhase('done'); setRunning(false)
+        setResult({ ping, download, upload })
+        addSpeedTest({ id: `s${Date.now()}`, download, upload, ping, timestamp: new Date().toISOString(), server: 'Lisboa — MEO' })
       }
     }, 80)
   }
 
+  const accent = phase === 'upload' ? 'var(--color-purple)' : 'var(--color-cyan)'
+  const r = 100
+  const circ = 2 * Math.PI * r
+  const dash = circ * (1 - progress / 100)
+
   const chartData = speedTests.slice(0, 10).reverse().map((t) => ({
     time: new Date(t.timestamp).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' }),
-    download: t.download,
-    upload: t.upload,
-    ping: t.ping,
+    download: t.download, upload: t.upload,
   }))
 
   return (
-    <div className="space-y-6">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       <div>
-        <h1 className="text-2xl font-bold flex items-center gap-3">
-          <Gauge className="w-6 h-6 text-cyan" />
+        <div className="page-title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <Gauge size={18} color="var(--color-cyan)" />
           Speed Test
-        </h1>
-        <p className="text-sm text-text-secondary mt-1">Testa a velocidade da tua ligação</p>
+        </div>
+        <div className="page-sub">Testa a velocidade da ligação à internet</div>
       </div>
 
-      {/* Speed Test Widget */}
-      <div className="glass-card glow-cyan p-8 flex flex-col items-center animate-fade-in-up">
-        <div className="relative w-64 h-64 flex items-center justify-center">
-          {/* Background circle */}
-          <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 256 256">
-            <circle cx="128" cy="128" r="110" fill="none" stroke="#1e1e4a" strokeWidth="8" />
+      {/* Main widget */}
+      <div className="card fade-up" style={{ padding: 40, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 28 }}>
+        {/* Ring */}
+        <div style={{ position: 'relative', width: 240, height: 240, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <svg style={{ position: 'absolute', inset: 0, transform: 'rotate(-90deg)' }} viewBox="0 0 240 240" width={240} height={240}>
+            <circle cx={120} cy={120} r={r} fill="none" stroke="var(--color-elevated)" strokeWidth={10} />
             <circle
-              cx="128" cy="128" r="110" fill="none"
-              stroke={phase === 'download' ? '#22c55e' : phase === 'upload' ? '#a855f7' : '#00f0ff'}
-              strokeWidth="8"
-              strokeLinecap="round"
-              strokeDasharray={`${2 * Math.PI * 110}`}
-              strokeDashoffset={`${2 * Math.PI * 110 * (1 - progress / 100)}`}
-              className="transition-all duration-100"
+              cx={120} cy={120} r={r} fill="none"
+              stroke={accent} strokeWidth={10} strokeLinecap="round"
+              strokeDasharray={circ} strokeDashoffset={dash}
+              style={{ transition: 'stroke-dashoffset 0.1s linear, stroke 0.3s ease' }}
             />
           </svg>
-
-          <div className="text-center z-10">
+          <div style={{ textAlign: 'center', zIndex: 1 }}>
             {phase === 'idle' ? (
               <button
                 onClick={runTest}
-                className="w-24 h-24 rounded-full bg-cyan/20 hover:bg-cyan/30 flex items-center justify-center transition-all hover:scale-105 border border-cyan/40"
+                style={{
+                  width: 80, height: 80, borderRadius: '50%', cursor: 'pointer',
+                  background: 'var(--color-cyan-dim)', border: '1px solid rgba(34,211,238,0.3)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'all 150ms',
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(34,211,238,0.2)' }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--color-cyan-dim)' }}
               >
-                <Play className="w-8 h-8 text-cyan ml-1" />
+                <Play size={24} color="var(--color-cyan)" style={{ marginLeft: 3 }} />
               </button>
-            ) : phase === 'done' && currentResult ? (
-              <>
-                <p className="text-4xl font-bold text-cyan">{currentResult.download}</p>
-                <p className="text-sm text-text-secondary">Mbps download</p>
-              </>
             ) : (
               <>
-                <p className="text-3xl font-bold text-cyan">
-                  {currentResult ? (
-                    phase === 'download' ? currentResult.download :
-                    phase === 'upload' ? currentResult.upload :
-                    currentResult.ping
-                  ) : '...'}
-                </p>
-                <p className="text-sm text-text-secondary capitalize">
-                  {phase === 'ping' ? 'A medir ping...' :
-                   phase === 'download' ? 'Download...' : 'Upload...'}
-                </p>
+                <div style={{ fontSize: 40, fontWeight: 700, fontFamily: 'var(--font-mono)', lineHeight: 1, color: accent }}>
+                  {result ? (phase === 'download' ? result.download : phase === 'upload' ? result.upload : phase === 'ping' ? '…' : result.download) : '…'}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--color-muted)', marginTop: 4 }}>
+                  {phase === 'ping' ? 'A medir ping' : phase === 'download' ? 'Mbps ↓' : phase === 'upload' ? 'Mbps ↑' : 'Mbps ↓'}
+                </div>
               </>
             )}
           </div>
         </div>
 
         {/* Results */}
-        {currentResult && phase === 'done' && (
-          <div className="grid grid-cols-3 gap-8 mt-6 w-full max-w-md">
-            <div className="text-center">
-              <ArrowDownToLine className="w-5 h-5 text-green mx-auto mb-1" />
-              <p className="text-2xl font-bold text-green">{currentResult.download}</p>
-              <p className="text-xs text-text-muted">Mbps</p>
-            </div>
-            <div className="text-center">
-              <ArrowUpFromLine className="w-5 h-5 text-purple mx-auto mb-1" />
-              <p className="text-2xl font-bold text-purple">{currentResult.upload}</p>
-              <p className="text-xs text-text-muted">Mbps</p>
-            </div>
-            <div className="text-center">
-              <Clock className="w-5 h-5 text-cyan mx-auto mb-1" />
-              <p className="text-2xl font-bold text-cyan">{currentResult.ping}</p>
-              <p className="text-xs text-text-muted">ms</p>
-            </div>
+        {result && phase === 'done' && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 24, width: '100%', maxWidth: 380 }}>
+            {[
+              { icon: ArrowDownToLine, color: 'var(--color-green)', label: 'Download', val: result.download, unit: 'Mbps' },
+              { icon: ArrowUpFromLine, color: 'var(--color-purple)', label: 'Upload', val: result.upload, unit: 'Mbps' },
+              { icon: Clock, color: 'var(--color-cyan)', label: 'Ping', val: result.ping, unit: 'ms' },
+            ].map((item) => (
+              <div key={item.label} style={{ textAlign: 'center' }}>
+                <item.icon size={16} color={item.color} style={{ margin: '0 auto 6px' }} />
+                <div style={{ fontSize: 28, fontWeight: 700, fontFamily: 'var(--font-mono)', color: item.color, lineHeight: 1 }}>{item.val}</div>
+                <div style={{ fontSize: 11, color: 'var(--color-muted)' }}>{item.unit}</div>
+              </div>
+            ))}
           </div>
         )}
 
         {phase === 'done' && (
-          <button
-            onClick={runTest}
-            className="mt-6 px-6 py-2 bg-cyan/10 text-cyan text-sm rounded-lg hover:bg-cyan/20 transition-colors border border-cyan/20"
-          >
-            Testar novamente
-          </button>
+          <button className="btn-primary" onClick={runTest}>Testar novamente</button>
         )}
       </div>
 
-      {/* History */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="glass-card p-5 animate-fade-in-up">
-          <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wider mb-4">
-            Histórico de Velocidade
-          </h2>
-          <ResponsiveContainer width="100%" height={250}>
-            <LineChart data={chartData}>
-              <XAxis dataKey="time" stroke="#475569" fontSize={10} tickLine={false} axisLine={false} />
-              <YAxis stroke="#475569" fontSize={10} tickLine={false} axisLine={false} />
-              <Tooltip contentStyle={{ background: '#111128', border: '1px solid #1e1e4a', borderRadius: 8, fontSize: 12 }} />
-              <Line type="monotone" dataKey="download" stroke="#22c55e" strokeWidth={2} dot={{ fill: '#22c55e', r: 3 }} name="Download" />
-              <Line type="monotone" dataKey="upload" stroke="#a855f7" strokeWidth={2} dot={{ fill: '#a855f7', r: 3 }} name="Upload" />
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        {/* Chart */}
+        <div className="card fade-up" style={{ padding: 20 }}>
+          <div className="section-title">Histórico</div>
+          <ResponsiveContainer width="100%" height={200}>
+            <LineChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+              <XAxis dataKey="time" stroke="#334155" fontSize={10} tickLine={false} axisLine={false} fontFamily="var(--font-mono)" />
+              <YAxis stroke="#334155" fontSize={10} tickLine={false} axisLine={false} />
+              <Tooltip contentStyle={chartStyle} />
+              <Line type="monotone" dataKey="download" stroke="var(--color-green)" strokeWidth={2} dot={{ fill: 'var(--color-green)', r: 3 }} name="Download" />
+              <Line type="monotone" dataKey="upload" stroke="var(--color-purple)" strokeWidth={2} dot={{ fill: 'var(--color-purple)', r: 3 }} name="Upload" />
             </LineChart>
           </ResponsiveContainer>
         </div>
 
-        <div className="glass-card p-5 animate-fade-in-up">
-          <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wider mb-4">
-            Testes Recentes
-          </h2>
-          <div className="space-y-3 max-h-[260px] overflow-y-auto">
-            {speedTests.slice(0, 8).map((test) => (
-              <div key={test.id} className="flex items-center justify-between p-3 rounded-lg bg-bg-secondary/30 text-sm">
-                <div className="flex items-center gap-3">
-                  <Server className="w-4 h-4 text-text-muted" />
-                  <div>
-                    <p className="text-xs text-text-muted">{test.server}</p>
-                    <p className="text-xs text-text-muted">
-                      {new Date(test.timestamp).toLocaleString('pt-PT')}
-                    </p>
-                  </div>
+        {/* Recent tests */}
+        <div className="card fade-up" style={{ padding: 20 }}>
+          <div className="section-title">Testes recentes</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 220, overflowY: 'auto' }}>
+            {speedTests.slice(0, 8).map((t) => (
+              <div key={t.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--color-border)', fontSize: 12 }}>
+                <div>
+                  <div style={{ fontWeight: 500, fontSize: 13 }}>{t.server}</div>
+                  <div style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>{new Date(t.timestamp).toLocaleString('pt-PT')}</div>
                 </div>
-                <div className="flex items-center gap-4 text-xs">
-                  <span className="text-green font-bold">{formatSpeed(test.download)}</span>
-                  <span className="text-purple font-bold">{formatSpeed(test.upload)}</span>
-                  <span className="text-cyan">{test.ping}ms</span>
+                <div style={{ display: 'flex', gap: 12, fontFamily: 'var(--font-mono)' }}>
+                  <span style={{ color: 'var(--color-green)' }}>{t.download} Mbps</span>
+                  <span style={{ color: 'var(--color-purple)' }}>{t.upload} Mbps</span>
+                  <span style={{ color: 'var(--color-cyan)' }}>{t.ping} ms</span>
                 </div>
               </div>
             ))}

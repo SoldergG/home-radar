@@ -1,92 +1,85 @@
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import {
-  Monitor, Search, Filter, Wifi, WifiOff, ArrowDownToLine,
-  ArrowUpFromLine, Clock, X, Plus, Trash2,
-} from 'lucide-react'
+import { Monitor, Search, Wifi, WifiOff, X, Trash2, RefreshCw } from 'lucide-react'
 import { useStore } from '../hooks/useStore'
-import { getDeviceEmoji, formatSpeed, formatBytes, timeAgo, getStatusColor, getSignalColor } from '../utils/helpers'
-import type { Device, DeviceType, DeviceStatus } from '../types'
+import { useAgent } from '../hooks/useAgent'
+import { getDeviceIcon, formatSpeed, formatBytes, timeAgo, getStatusColor, getSignalColor } from '../utils/helpers'
+import type { DeviceType, DeviceStatus } from '../types'
+import * as LucideIcons from 'lucide-react'
+import type { LucideProps } from 'lucide-react'
 
-const deviceTypes: { value: DeviceType | 'all'; label: string }[] = [
-  { value: 'all', label: 'Todos' },
-  { value: 'phone', label: 'Telefones' },
-  { value: 'laptop', label: 'Portáteis' },
-  { value: 'tablet', label: 'Tablets' },
-  { value: 'tv', label: 'TVs' },
-  { value: 'console', label: 'Consolas' },
-  { value: 'speaker', label: 'Colunas' },
-  { value: 'camera', label: 'Câmaras' },
-  { value: 'router', label: 'Router' },
-  { value: 'iot', label: 'IoT' },
+function DynIcon({ name, ...p }: { name: string } & LucideProps) {
+  const I = (LucideIcons as Record<string, React.ComponentType<LucideProps>>)[name]
+  return I ? <I {...p} /> : <LucideIcons.HelpCircle {...p} />
+}
+
+const TYPES: { value: DeviceType | 'all'; label: string }[] = [
+  { value: 'all',     label: 'Todos'    },
+  { value: 'phone',   label: 'Telefone' },
+  { value: 'laptop',  label: 'Portátil' },
+  { value: 'tablet',  label: 'Tablet'   },
+  { value: 'tv',      label: 'TV'       },
+  { value: 'console', label: 'Consola'  },
+  { value: 'router',  label: 'Router'   },
+  { value: 'camera',  label: 'Câmara'   },
+  { value: 'iot',     label: 'IoT'      },
 ]
+
+function Row({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: '1px solid var(--color-border)', fontSize: 13 }}>
+      <span style={{ color: 'var(--color-muted)' }}>{label}</span>
+      <span style={mono ? { fontFamily: 'var(--font-mono)', fontSize: 11 } : undefined}>{value}</span>
+    </div>
+  )
+}
 
 export default function DevicesPage() {
   const { devices, users, removeDevice } = useStore()
-  const [searchParams] = useSearchParams()
+  const { status, sync } = useAgent()
+  const [sp] = useSearchParams()
   const [search, setSearch] = useState('')
-  const [typeFilter, setTypeFilter] = useState<DeviceType | 'all'>('all')
-  const [statusFilter, setStatusFilter] = useState<DeviceStatus | 'all'>('all')
-  const [selected, setSelected] = useState<string | null>(searchParams.get('selected'))
-  const [showAdd, setShowAdd] = useState(false)
+  const [typeF, setTypeF] = useState<DeviceType | 'all'>('all')
+  const [statusF, setStatusF] = useState<DeviceStatus | 'all'>('all')
+  const [selId, setSelId] = useState<string | null>(sp.get('selected'))
 
   const filtered = devices.filter((d) => {
     if (search && !d.name.toLowerCase().includes(search.toLowerCase()) && !d.ip.includes(search) && !d.mac.toLowerCase().includes(search.toLowerCase())) return false
-    if (typeFilter !== 'all' && d.type !== typeFilter) return false
-    if (statusFilter !== 'all' && d.status !== statusFilter) return false
+    if (typeF !== 'all' && d.type !== typeF) return false
+    if (statusF !== 'all' && d.status !== statusF) return false
     return true
   })
 
-  const selectedDevice = selected ? devices.find((d) => d.id === selected) : null
-  const selectedUser = selectedDevice?.userId ? users.find((u) => u.id === selectedDevice.userId) : null
+  const sel = selId ? devices.find((d) => d.id === selId) : null
+  const selUser = sel?.userId ? users.find((u) => u.id === sel.userId) : null
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-3">
-            <Monitor className="w-6 h-6 text-cyan" />
+          <div className="page-title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <Monitor size={18} color="var(--color-cyan)" />
             Dispositivos
-          </h1>
-          <p className="text-sm text-text-secondary mt-1">
-            {devices.length} dispositivos · {devices.filter((d) => d.status === 'online').length} online
-          </p>
+          </div>
+          <div className="page-sub">{devices.length} dispositivos · {devices.filter((d) => d.status === 'online').length} online</div>
         </div>
-        <button
-          onClick={() => setShowAdd(!showAdd)}
-          className="flex items-center gap-2 px-4 py-2 bg-cyan/10 text-cyan text-sm rounded-lg hover:bg-cyan/20 transition-colors border border-cyan/20"
-        >
-          <Plus className="w-4 h-4" />
-          Adicionar
+        <button className="btn-ghost" style={{ fontSize: 12 }} onClick={sync}>
+          <RefreshCw size={13} style={status === 'connecting' ? { animation: 'spin 1s linear infinite' } : undefined} />
+          Actualizar scan
         </button>
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
-          <input
-            type="text"
-            placeholder="Procurar por nome, IP ou MAC..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-bg-card border border-border rounded-lg text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-cyan/50"
-          />
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <div style={{ position: 'relative', flex: '1 1 200px', maxWidth: 300 }}>
+          <Search size={13} color="var(--color-muted)" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }} />
+          <input className="input" style={{ paddingLeft: 32 }} placeholder="Nome, IP ou MAC…" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
-        <select
-          value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value as DeviceType | 'all')}
-          className="px-3 py-2 bg-bg-card border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-cyan/50"
-        >
-          {deviceTypes.map((t) => (
-            <option key={t.value} value={t.value}>{t.label}</option>
-          ))}
+        <select className="input" style={{ flex: '0 0 140px' }} value={typeF} onChange={(e) => setTypeF(e.target.value as DeviceType | 'all')}>
+          {TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
         </select>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as DeviceStatus | 'all')}
-          className="px-3 py-2 bg-bg-card border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-cyan/50"
-        >
+        <select className="input" style={{ flex: '0 0 140px' }} value={statusF} onChange={(e) => setStatusF(e.target.value as DeviceStatus | 'all')}>
           <option value="all">Todos estados</option>
           <option value="online">Online</option>
           <option value="away">Ausente</option>
@@ -94,149 +87,100 @@ export default function DevicesPage() {
         </select>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_380px] gap-6">
-        {/* Device Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {filtered.map((device) => {
-            const user = device.userId ? users.find((u) => u.id === device.userId) : null
+      <div style={{ display: 'grid', gridTemplateColumns: sel ? '1fr 340px' : '1fr', gap: 16, alignItems: 'start' }}>
+        {/* Grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px,1fr))', gap: 10 }}>
+          {filtered.map((d) => {
+            const user = d.userId ? users.find((u) => u.id === d.userId) : null
+            const active = selId === d.id
             return (
               <button
-                key={device.id}
-                onClick={() => setSelected(device.id === selected ? null : device.id)}
-                className={`glass-card p-4 text-left transition-all hover:border-cyan/30 animate-fade-in-up ${
-                  selected === device.id ? 'border-cyan/50 glow-cyan' : ''
-                }`}
+                key={d.id}
+                onClick={() => setSelId(active ? null : d.id)}
+                style={{
+                  padding: 16, borderRadius: 12, textAlign: 'left', cursor: 'pointer',
+                  background: active ? 'var(--color-cyan-dim)' : 'var(--color-card)',
+                  border: `1px solid ${active ? 'rgba(34,211,238,0.3)' : 'var(--color-border)'}`,
+                  transition: 'all 150ms ease',
+                }}
+                onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLElement).style.borderColor = 'var(--color-border-hi)' }}
+                onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLElement).style.borderColor = 'var(--color-border)' }}
               >
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-2xl">{getDeviceEmoji(device.type)}</span>
-                    <div>
-                      <p className="font-medium text-sm truncate max-w-[140px]">{device.name}</p>
-                      <p className="text-xs text-text-muted font-mono">{device.ip}</p>
-                    </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 9, background: 'var(--color-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <DynIcon name={getDeviceIcon(d.type)} size={16} color="var(--color-cyan)" />
                   </div>
-                  <div
-                    className="w-2.5 h-2.5 rounded-full flex-shrink-0 mt-1"
-                    style={{ background: getStatusColor(device.status) }}
-                  />
+                  <span className={`dot-${d.status}`} style={{ marginTop: 6 }} />
                 </div>
-                <div className="flex items-center justify-between text-xs text-text-secondary">
-                  <div className="flex items-center gap-3">
-                    <span className="flex items-center gap-1">
-                      <ArrowDownToLine className="w-3 h-3 text-green" />
-                      {formatSpeed(device.downloadSpeed)}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <ArrowUpFromLine className="w-3 h-3 text-purple" />
-                      {formatSpeed(device.uploadSpeed)}
-                    </span>
-                  </div>
-                  {user && (
-                    <span className="text-xs">{user.avatar}</span>
-                  )}
+                <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 2 }}>{d.name}</div>
+                <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--color-muted)', marginBottom: 8 }}>{d.ip}</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--color-muted)' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ color: 'var(--color-green)' }}>{formatSpeed(d.downloadSpeed)}</span>
+                  </span>
+                  {user && <span>{user.name}</span>}
                 </div>
               </button>
             )
           })}
           {filtered.length === 0 && (
-            <div className="col-span-full glass-card p-12 text-center">
-              <Filter className="w-8 h-8 text-text-muted mx-auto mb-2" />
-              <p className="text-text-secondary text-sm">Nenhum dispositivo encontrado</p>
+            <div className="card" style={{ gridColumn: '1/-1', padding: 40, textAlign: 'center', color: 'var(--color-muted)', fontSize: 13 }}>
+              Nenhum dispositivo encontrado
             </div>
           )}
         </div>
 
-        {/* Detail Panel */}
-        {selectedDevice && (
-          <div className="glass-card p-5 animate-fade-in-up h-fit sticky top-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <span className="text-3xl">{getDeviceEmoji(selectedDevice.type)}</span>
+        {/* Detail panel */}
+        {sel && (
+          <div className="card fade-up" style={{ padding: 20, position: 'sticky', top: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--color-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <DynIcon name={getDeviceIcon(sel.type)} size={18} color="var(--color-cyan)" />
+                </div>
                 <div>
-                  <h3 className="font-bold">{selectedDevice.name}</h3>
-                  <span
-                    className="text-xs capitalize"
-                    style={{ color: getStatusColor(selectedDevice.status) }}
+                  <div style={{ fontWeight: 600 }}>{sel.name}</div>
+                  <span className="badge" style={{ marginTop: 3 }}
+                    {...(sel.status === 'online' ? { className: 'badge badge-green' } : sel.status === 'offline' ? { className: 'badge badge-red' } : { className: 'badge badge-amber' })}
                   >
-                    {selectedDevice.status}
+                    {sel.status}
                   </span>
                 </div>
               </div>
               <button
-                onClick={() => setSelected(null)}
-                className="p-1 hover:bg-white/10 rounded transition-colors"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-muted)', padding: 4 }}
+                onClick={() => setSelId(null)}
               >
-                <X className="w-4 h-4 text-text-muted" />
+                <X size={14} />
               </button>
             </div>
 
-            <div className="space-y-3 text-sm">
-              <DetailRow label="Tipo" value={selectedDevice.type} />
-              <DetailRow label="IP" value={selectedDevice.ip} mono />
-              <DetailRow label="MAC" value={selectedDevice.mac} mono />
-              <DetailRow label="Fabricante" value={selectedDevice.vendor} />
-              <DetailRow label="Utilizador" value={selectedUser ? `${selectedUser.avatar} ${selectedUser.name}` : 'Não atribuído'} />
+            <Row label="IP"          value={sel.ip}     mono />
+            <Row label="MAC"         value={sel.mac}    mono />
+            <Row label="Fabricante"  value={sel.vendor} />
+            <Row label="Utilizador"  value={selUser ? selUser.name : '—'} />
+            <Row label="Download"    value={<span style={{ color: 'var(--color-green)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>{formatSpeed(sel.downloadSpeed)}</span>} />
+            <Row label="Upload"      value={<span style={{ color: 'var(--color-purple)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>{formatSpeed(sel.uploadSpeed)}</span>} />
+            <Row label="Total DL"    value={<span style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>{formatBytes(sel.totalDownload)}</span>} />
+            <Row label="Último visto" value={<span style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{timeAgo(sel.lastSeen)}</span>} />
 
-              <div className="pt-2 border-t border-border">
-                <p className="text-text-muted text-xs mb-2">Sinal WiFi</p>
-                <div className="flex items-center gap-3">
-                  <div className="flex-1 h-2 bg-bg-secondary rounded-full overflow-hidden">
-                    <div
-                      className="h-full rounded-full transition-all"
-                      style={{
-                        width: `${selectedDevice.signalStrength}%`,
-                        background: getSignalColor(selectedDevice.signalStrength),
-                      }}
-                    />
-                  </div>
-                  <span className="text-xs font-mono">{selectedDevice.signalStrength}%</span>
+            <div style={{ marginTop: 14, marginBottom: 16 }}>
+              <div style={{ fontSize: 11, color: 'var(--color-muted)', marginBottom: 6 }}>Sinal WiFi</div>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <div className="progress-track" style={{ flex: 1 }}>
+                  <div className="progress-bar" style={{ width: `${sel.signalStrength}%`, background: getSignalColor(sel.signalStrength) }} />
                 </div>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--color-muted)' }}>{sel.signalStrength}%</span>
               </div>
-
-              <div className="pt-2 border-t border-border grid grid-cols-2 gap-3">
-                <div>
-                  <p className="text-text-muted text-xs mb-1">Download</p>
-                  <p className="text-green font-bold">{formatSpeed(selectedDevice.downloadSpeed)}</p>
-                  <p className="text-text-muted text-xs">{formatBytes(selectedDevice.totalDownload)} total</p>
-                </div>
-                <div>
-                  <p className="text-text-muted text-xs mb-1">Upload</p>
-                  <p className="text-purple font-bold">{formatSpeed(selectedDevice.uploadSpeed)}</p>
-                  <p className="text-text-muted text-xs">{formatBytes(selectedDevice.totalUpload)} total</p>
-                </div>
-              </div>
-
-              <div className="pt-2 border-t border-border space-y-1 text-xs text-text-muted">
-                <div className="flex justify-between">
-                  <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> Último visto</span>
-                  <span>{timeAgo(selectedDevice.lastSeen)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Primeiro visto</span>
-                  <span>{new Date(selectedDevice.firstSeen).toLocaleDateString('pt-PT')}</span>
-                </div>
-              </div>
-
-              <button
-                onClick={() => { removeDevice(selectedDevice.id); setSelected(null) }}
-                className="w-full mt-2 flex items-center justify-center gap-2 px-4 py-2 bg-red/10 text-red text-xs rounded-lg hover:bg-red/20 transition-colors border border-red/20"
-              >
-                <Trash2 className="w-3 h-3" />
-                Remover dispositivo
-              </button>
             </div>
+
+            <button className="btn-danger" style={{ width: '100%', justifyContent: 'center', fontSize: 12 }}
+              onClick={() => { removeDevice(sel.id); setSelId(null) }}>
+              <Trash2 size={12} /> Remover
+            </button>
           </div>
         )}
       </div>
-    </div>
-  )
-}
-
-function DetailRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <div className="flex items-center justify-between">
-      <span className="text-text-muted">{label}</span>
-      <span className={mono ? 'font-mono text-xs' : ''}>{value}</span>
     </div>
   )
 }

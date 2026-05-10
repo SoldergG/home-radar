@@ -1,220 +1,178 @@
 import { useState } from 'react'
-import { Users, Plus, X, Link2, Unlink, Pencil } from 'lucide-react'
+import { Users, Plus, X, Link2, Unlink, Pencil, Trash2 } from 'lucide-react'
 import { useStore } from '../hooks/useStore'
-import { getDeviceEmoji, formatBytes } from '../utils/helpers'
+import { getDeviceIcon, formatBytes } from '../utils/helpers'
+import * as LucideIcons from 'lucide-react'
+import type { LucideProps } from 'lucide-react'
 
-const avatarOptions = ['👨‍💻', '👩', '🧑', '👦', '👧', '👨', '👩‍💼', '🧓', '👶', '🐱', '🐶']
-const colorOptions = ['#00f0ff', '#a855f7', '#22c55e', '#f59e0b', '#ef4444', '#ec4899', '#06b6d4', '#8b5cf6']
+function DynIcon({ name, ...p }: { name: string } & LucideProps) {
+  const I = (LucideIcons as Record<string, React.ComponentType<LucideProps>>)[name]
+  return I ? <I {...p} /> : <LucideIcons.HelpCircle {...p} />
+}
+
+const AVATARS = ['😀', '👨‍💻', '👩', '🧑', '👦', '👧', '👨', '🧓', '🐱', '🐶']
+const COLORS  = ['#22d3ee','#a78bfa','#22c55e','#fbbf24','#f87171','#ec4899','#06b6d4','#8b5cf6']
 
 export default function UsersPage() {
   const { users, devices, addUser, updateUser, removeUser, assignDevice, unassignDevice } = useStore()
-  const [showAdd, setShowAdd] = useState(false)
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [form, setForm] = useState({ name: '', avatar: '👨‍💻', color: '#00f0ff' })
-  const [assigningUserId, setAssigningUserId] = useState<string | null>(null)
+  const [showAdd, setShowAdd]       = useState(false)
+  const [editId, setEditId]         = useState<string | null>(null)
+  const [assignFor, setAssignFor]   = useState<string | null>(null)
+  const [form, setForm] = useState({ name: '', avatar: '😀', color: '#22d3ee' })
 
-  const unassignedDevices = devices.filter((d) => !d.userId && d.type !== 'router')
+  const unassigned = devices.filter((d) => !d.userId && d.type !== 'router')
 
-  const handleAdd = () => {
+  const saveNew = () => {
     if (!form.name.trim()) return
-    const id = `u${Date.now()}`
-    addUser({ id, name: form.name, avatar: form.avatar, color: form.color, devices: [] })
-    setForm({ name: '', avatar: '👨‍💻', color: '#00f0ff' })
-    setShowAdd(false)
+    addUser({ id: `u${Date.now()}`, name: form.name, avatar: form.avatar, color: form.color, devices: [] })
+    setForm({ name: '', avatar: '😀', color: '#22d3ee' }); setShowAdd(false)
   }
-
-  const handleUpdate = () => {
-    if (!editingId || !form.name.trim()) return
-    updateUser(editingId, { name: form.name, avatar: form.avatar, color: form.color })
-    setEditingId(null)
-    setForm({ name: '', avatar: '👨‍💻', color: '#00f0ff' })
+  const saveEdit = () => {
+    if (!editId || !form.name.trim()) return
+    updateUser(editId, { name: form.name, avatar: form.avatar, color: form.color })
+    setEditId(null); setForm({ name: '', avatar: '😀', color: '#22d3ee' })
   }
-
-  const startEdit = (user: typeof users[0]) => {
-    setEditingId(user.id)
-    setForm({ name: user.name, avatar: user.avatar, color: user.color })
-    setShowAdd(false)
+  const startEdit = (u: typeof users[0]) => {
+    setEditId(u.id); setForm({ name: u.name, avatar: u.avatar, color: u.color }); setShowAdd(false)
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-3">
-            <Users className="w-6 h-6 text-cyan" />
-            Utilizadores
-          </h1>
-          <p className="text-sm text-text-secondary mt-1">
-            Gere quem usa a rede e os seus dispositivos
-          </p>
+          <div className="page-title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <Users size={18} color="var(--color-cyan)" /> Utilizadores
+          </div>
+          <div className="page-sub">Associa dispositivos a pessoas da casa</div>
         </div>
-        <button
-          onClick={() => { setShowAdd(!showAdd); setEditingId(null) }}
-          className="flex items-center gap-2 px-4 py-2 bg-cyan/10 text-cyan text-sm rounded-lg hover:bg-cyan/20 transition-colors border border-cyan/20"
-        >
-          <Plus className="w-4 h-4" />
-          Novo utilizador
+        <button className="btn-primary" onClick={() => { setShowAdd(!showAdd); setEditId(null) }}>
+          <Plus size={13} /> Novo
         </button>
       </div>
 
-      {/* Add/Edit Form */}
-      {(showAdd || editingId) && (
-        <div className="glass-card p-5 animate-fade-in-up">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold">
-              {editingId ? 'Editar Utilizador' : 'Novo Utilizador'}
-            </h3>
-            <button
-              onClick={() => { setShowAdd(false); setEditingId(null) }}
-              className="p-1 hover:bg-white/10 rounded"
-            >
-              <X className="w-4 h-4 text-text-muted" />
-            </button>
+      {/* Add / Edit form */}
+      {(showAdd || editId) && (
+        <div className="card fade-up" style={{ padding: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+            <span style={{ fontWeight: 600, fontSize: 14 }}>{editId ? 'Editar utilizador' : 'Novo utilizador'}</span>
+            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-muted)' }}
+              onClick={() => { setShowAdd(false); setEditId(null) }}><X size={14} /></button>
           </div>
-
-          <div className="space-y-4">
-            <input
-              type="text"
-              placeholder="Nome do utilizador"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              className="w-full px-4 py-2 bg-bg-secondary border border-border rounded-lg text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-cyan/50"
-            />
-
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <input className="input" placeholder="Nome…" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             <div>
-              <p className="text-xs text-text-muted mb-2">Avatar</p>
-              <div className="flex flex-wrap gap-2">
-                {avatarOptions.map((emoji) => (
-                  <button
-                    key={emoji}
-                    onClick={() => setForm({ ...form, avatar: emoji })}
-                    className={`w-10 h-10 rounded-lg text-xl flex items-center justify-center transition-all ${
-                      form.avatar === emoji ? 'bg-cyan/20 border border-cyan/50 scale-110' : 'bg-bg-secondary border border-border hover:bg-white/5'
-                    }`}
-                  >
-                    {emoji}
-                  </button>
+              <div style={{ fontSize: 11, color: 'var(--color-muted)', marginBottom: 8 }}>Avatar</div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {AVATARS.map((a) => (
+                  <button key={a} onClick={() => setForm({ ...form, avatar: a })} style={{
+                    width: 38, height: 38, borderRadius: 8, fontSize: 18, cursor: 'pointer',
+                    background: form.avatar === a ? 'var(--color-cyan-dim)' : 'var(--color-elevated)',
+                    border: form.avatar === a ? '1px solid rgba(34,211,238,0.4)' : '1px solid var(--color-border)',
+                  }}>{a}</button>
                 ))}
               </div>
             </div>
-
             <div>
-              <p className="text-xs text-text-muted mb-2">Cor</p>
-              <div className="flex gap-2">
-                {colorOptions.map((c) => (
-                  <button
-                    key={c}
-                    onClick={() => setForm({ ...form, color: c })}
-                    className={`w-8 h-8 rounded-full transition-all ${
-                      form.color === c ? 'ring-2 ring-white ring-offset-2 ring-offset-bg-primary scale-110' : 'hover:scale-105'
-                    }`}
-                    style={{ background: c }}
-                  />
+              <div style={{ fontSize: 11, color: 'var(--color-muted)', marginBottom: 8 }}>Cor</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {COLORS.map((c) => (
+                  <button key={c} onClick={() => setForm({ ...form, color: c })} style={{
+                    width: 28, height: 28, borderRadius: '50%', background: c, border: 'none', cursor: 'pointer',
+                    outline: form.color === c ? `2px solid ${c}` : 'none',
+                    outlineOffset: 2,
+                  }} />
                 ))}
               </div>
             </div>
-
-            <button
-              onClick={editingId ? handleUpdate : handleAdd}
-              className="px-6 py-2 bg-cyan text-bg-primary text-sm font-medium rounded-lg hover:bg-cyan/90 transition-colors"
-            >
-              {editingId ? 'Guardar' : 'Criar utilizador'}
+            <button className="btn-primary" style={{ alignSelf: 'flex-start' }} onClick={editId ? saveEdit : saveNew}>
+              {editId ? 'Guardar' : 'Criar'}
             </button>
           </div>
         </div>
       )}
 
-      {/* Users Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {/* Users grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px,1fr))', gap: 14 }}>
         {users.map((user) => {
-          const userDevices = devices.filter((d) => user.devices.includes(d.id))
-          const totalDown = userDevices.reduce((sum, d) => sum + d.totalDownload, 0)
-          const totalUp = userDevices.reduce((sum, d) => sum + d.totalUpload, 0)
-          const onlineCount = userDevices.filter((d) => d.status === 'online').length
+          const uDevices = devices.filter((d) => user.devices.includes(d.id))
+          const totalDl  = uDevices.reduce((s, d) => s + d.totalDownload, 0)
+          const onlineN  = uDevices.filter((d) => d.status === 'online').length
 
           return (
-            <div key={user.id} className="glass-card p-5 animate-fade-in-up">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div
-                    className="w-12 h-12 rounded-full flex items-center justify-center text-2xl"
-                    style={{ background: `${user.color}20`, border: `2px solid ${user.color}40` }}
-                  >
-                    {user.avatar}
-                  </div>
+            <div key={user.id} className="card fade-up" style={{ padding: 20 }}>
+              {/* User header */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{
+                    width: 44, height: 44, borderRadius: '50%', fontSize: 20,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: `${user.color}18`,
+                    border: `2px solid ${user.color}40`,
+                  }}>{user.avatar}</div>
                   <div>
-                    <h3 className="font-bold" style={{ color: user.color }}>{user.name}</h3>
-                    <p className="text-xs text-text-muted">
-                      {userDevices.length} dispositivo{userDevices.length !== 1 ? 's' : ''} · {onlineCount} online
-                    </p>
+                    <div style={{ fontWeight: 600, color: user.color }}>{user.name}</div>
+                    <div style={{ fontSize: 11, color: 'var(--color-muted)', marginTop: 2 }}>
+                      {uDevices.length} dispositivo{uDevices.length !== 1 ? 's' : ''} · {onlineN} online
+                    </div>
                   </div>
                 </div>
-                <div className="flex gap-1">
-                  <button
-                    onClick={() => startEdit(user)}
-                    className="p-1.5 hover:bg-white/10 rounded transition-colors"
-                  >
-                    <Pencil className="w-3.5 h-3.5 text-text-muted" />
-                  </button>
-                  <button
-                    onClick={() => setAssigningUserId(assigningUserId === user.id ? null : user.id)}
-                    className="p-1.5 hover:bg-white/10 rounded transition-colors"
-                  >
-                    <Link2 className="w-3.5 h-3.5 text-text-muted" />
-                  </button>
+                <div style={{ display: 'flex', gap: 4 }}>
+                  <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-muted)', padding: 4 }}
+                    onClick={() => startEdit(user)} title="Editar"><Pencil size={13} /></button>
+                  <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-muted)', padding: 4 }}
+                    onClick={() => setAssignFor(assignFor === user.id ? null : user.id)} title="Atribuir dispositivo"><Link2 size={13} /></button>
+                  <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-red)', padding: 4 }}
+                    onClick={() => removeUser(user.id)} title="Remover"><Trash2 size={13} /></button>
                 </div>
               </div>
 
-              {/* User stats */}
-              <div className="grid grid-cols-2 gap-3 mb-4 p-3 bg-bg-secondary/50 rounded-lg">
+              {/* Stats strip */}
+              <div style={{ display: 'flex', gap: 16, marginBottom: 14, padding: '10px 12px', background: 'var(--color-elevated)', borderRadius: 8 }}>
                 <div>
-                  <p className="text-xs text-text-muted">Download total</p>
-                  <p className="text-sm font-bold text-green">{formatBytes(totalDown)}</p>
+                  <div style={{ fontSize: 10, color: 'var(--color-muted)' }}>Download total</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-green)', fontFamily: 'var(--font-mono)' }}>{formatBytes(totalDl)}</div>
                 </div>
                 <div>
-                  <p className="text-xs text-text-muted">Upload total</p>
-                  <p className="text-sm font-bold text-purple">{formatBytes(totalUp)}</p>
+                  <div style={{ fontSize: 10, color: 'var(--color-muted)' }}>Dispositivos</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, fontFamily: 'var(--font-mono)' }}>{uDevices.length}</div>
                 </div>
               </div>
 
-              {/* Devices */}
-              <div className="space-y-2">
-                {userDevices.map((device) => (
-                  <div
-                    key={device.id}
-                    className="flex items-center justify-between p-2 rounded-lg bg-bg-secondary/30"
-                  >
-                    <div className="flex items-center gap-2 text-sm">
-                      <span>{getDeviceEmoji(device.type)}</span>
-                      <span className="truncate">{device.name}</span>
-                    </div>
-                    <button
-                      onClick={() => unassignDevice(user.id, device.id)}
-                      className="p-1 hover:bg-red/20 rounded transition-colors"
-                    >
-                      <Unlink className="w-3 h-3 text-text-muted hover:text-red" />
-                    </button>
+              {/* Device list */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {uDevices.map((d) => (
+                  <div key={d.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 8, padding: '7px 8px',
+                    borderRadius: 7, background: 'var(--color-elevated)',
+                  }}>
+                    <DynIcon name={getDeviceIcon(d.type)} size={13} color="var(--color-muted)" />
+                    <span style={{ flex: 1, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</span>
+                    <span className={`dot-${d.status}`} />
+                    <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-muted)', padding: 2 }}
+                      onClick={() => unassignDevice(user.id, d.id)} title="Desatribuir"><Unlink size={11} /></button>
                   </div>
                 ))}
-                {userDevices.length === 0 && (
-                  <p className="text-xs text-text-muted text-center py-2">Sem dispositivos</p>
+                {uDevices.length === 0 && (
+                  <div style={{ fontSize: 12, color: 'var(--color-muted)', textAlign: 'center', padding: 10 }}>Sem dispositivos</div>
                 )}
               </div>
 
-              {/* Assign Device Panel */}
-              {assigningUserId === user.id && unassignedDevices.length > 0 && (
-                <div className="mt-3 pt-3 border-t border-border">
-                  <p className="text-xs text-text-muted mb-2">Atribuir dispositivo:</p>
-                  <div className="space-y-1">
-                    {unassignedDevices.map((d) => (
-                      <button
-                        key={d.id}
-                        onClick={() => { assignDevice(user.id, d.id); setAssigningUserId(null) }}
-                        className="w-full flex items-center gap-2 p-2 rounded-lg text-sm hover:bg-cyan/10 transition-colors text-left"
-                      >
-                        <span>{getDeviceEmoji(d.type)}</span>
-                        <span className="truncate">{d.name}</span>
-                        <Plus className="w-3 h-3 ml-auto text-cyan" />
+              {/* Assign panel */}
+              {assignFor === user.id && unassigned.length > 0 && (
+                <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--color-border)' }}>
+                  <div style={{ fontSize: 11, color: 'var(--color-muted)', marginBottom: 6 }}>Atribuir dispositivo:</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    {unassigned.map((d) => (
+                      <button key={d.id} style={{
+                        display: 'flex', alignItems: 'center', gap: 8, padding: '7px 8px',
+                        borderRadius: 7, background: 'none', border: '1px solid var(--color-border)',
+                        cursor: 'pointer', textAlign: 'left', color: 'var(--color-text)', fontSize: 13,
+                      }}
+                        onClick={() => { assignDevice(user.id, d.id); setAssignFor(null) }}>
+                        <DynIcon name={getDeviceIcon(d.type)} size={13} color="var(--color-muted)" />
+                        <span style={{ flex: 1 }}>{d.name}</span>
+                        <Plus size={11} color="var(--color-cyan)" />
                       </button>
                     ))}
                   </div>
@@ -225,23 +183,19 @@ export default function UsersPage() {
         })}
       </div>
 
-      {/* Unassigned Devices */}
-      {unassignedDevices.length > 0 && (
-        <div className="glass-card p-5 animate-fade-in-up">
-          <h3 className="text-sm font-semibold text-text-secondary uppercase tracking-wider mb-3">
-            Dispositivos sem utilizador ({unassignedDevices.length})
-          </h3>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-            {unassignedDevices.map((d) => (
-              <div
-                key={d.id}
-                className="flex items-center gap-2 p-3 rounded-lg bg-bg-secondary/30 text-sm"
-              >
-                <span>{getDeviceEmoji(d.type)}</span>
-                <div className="min-w-0">
-                  <p className="truncate">{d.name}</p>
-                  <p className="text-xs text-text-muted">{d.ip}</p>
-                </div>
+      {/* Unassigned */}
+      {unassigned.length > 0 && (
+        <div className="card fade-up" style={{ padding: 20 }}>
+          <div className="section-title">Dispositivos sem utilizador ({unassigned.length})</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {unassigned.map((d) => (
+              <div key={d.id} style={{
+                display: 'flex', alignItems: 'center', gap: 8, padding: '7px 12px',
+                borderRadius: 8, background: 'var(--color-elevated)', border: '1px solid var(--color-border)', fontSize: 13,
+              }}>
+                <DynIcon name={getDeviceIcon(d.type)} size={12} color="var(--color-muted)" />
+                <span>{d.name}</span>
+                <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--color-muted)' }}>{d.ip}</span>
               </div>
             ))}
           </div>

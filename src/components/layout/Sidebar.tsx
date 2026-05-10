@@ -1,91 +1,149 @@
 import { NavLink } from 'react-router-dom'
 import {
-  LayoutDashboard,
-  Radar,
-  Monitor,
-  Users,
-  Activity,
-  Shield,
-  Gauge,
-  Settings,
-  Bell,
-  ChevronLeft,
-  ChevronRight,
-  Wifi,
+  LayoutDashboard, Radar, Monitor, Users, Activity,
+  Shield, Gauge, Settings, Bell, ChevronLeft, ChevronRight,
+  Wifi, RefreshCw,
 } from 'lucide-react'
 import { useStore } from '../../hooks/useStore'
+import { useAgent } from '../../hooks/useAgent'
 
-const navItems = [
-  { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/radar', icon: Radar, label: 'Radar' },
-  { to: '/devices', icon: Monitor, label: 'Dispositivos' },
-  { to: '/users', icon: Users, label: 'Utilizadores' },
-  { to: '/network', icon: Activity, label: 'Rede' },
-  { to: '/speedtest', icon: Gauge, label: 'Speed Test' },
-  { to: '/security', icon: Shield, label: 'Segurança' },
-  { to: '/alerts', icon: Bell, label: 'Alertas' },
-  { to: '/settings', icon: Settings, label: 'Definições' },
+const nav = [
+  { to: '/',          icon: LayoutDashboard, label: 'Dashboard'     },
+  { to: '/radar',     icon: Radar,           label: 'Radar'         },
+  { to: '/devices',   icon: Monitor,         label: 'Dispositivos'  },
+  { to: '/users',     icon: Users,           label: 'Utilizadores'  },
+  { to: '/network',   icon: Activity,        label: 'Rede'          },
+  { to: '/speedtest', icon: Gauge,           label: 'Speed Test'    },
+  { to: '/security',  icon: Shield,          label: 'Segurança'     },
+  { to: '/alerts',    icon: Bell,            label: 'Alertas'       },
+  { to: '/settings',  icon: Settings,        label: 'Definições'    },
 ]
 
 export default function Sidebar() {
   const { sidebarOpen, toggleSidebar, alerts } = useStore()
-  const unreadAlerts = alerts.filter((a) => !a.read).length
+  const { status, lastSync, sync } = useAgent(30000)
+  const unread = alerts.filter((a) => !a.read).length
+
+  const statusColor =
+    status === 'online' ? 'var(--color-green)' :
+    status === 'connecting' ? 'var(--color-amber)' :
+    'var(--color-red)'
 
   return (
     <aside
-      className={`fixed left-0 top-0 h-full z-50 flex flex-col transition-all duration-300 ${
-        sidebarOpen ? 'w-56' : 'w-16'
-      }`}
       style={{
-        background: 'linear-gradient(180deg, #0c0c1a 0%, #06060e 100%)',
+        position: 'fixed', top: 0, left: 0, height: '100%', zIndex: 50,
+        width: sidebarOpen ? 220 : 56,
+        background: '#080f1d',
         borderRight: '1px solid var(--color-border)',
+        display: 'flex', flexDirection: 'column',
+        transition: 'width 250ms ease',
+        overflow: 'hidden',
       }}
     >
-      <div className="flex items-center gap-3 px-4 h-16 border-b border-border">
-        <div className="w-8 h-8 rounded-lg bg-cyan/20 flex items-center justify-center flex-shrink-0">
-          <Wifi className="w-4 h-4 text-cyan" />
+      {/* Logo */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px',
+        height: 56, borderBottom: '1px solid var(--color-border)',
+        flexShrink: 0,
+      }}>
+        <div style={{
+          width: 28, height: 28, borderRadius: 7, flexShrink: 0,
+          background: 'var(--color-cyan-dim)', border: '1px solid rgba(34,211,238,0.2)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <Wifi size={14} color="var(--color-cyan)" />
         </div>
         {sidebarOpen && (
-          <span className="text-sm font-bold tracking-wider text-cyan whitespace-nowrap">
-            HOME RADAR
+          <span style={{
+            fontSize: 13, fontWeight: 700, letterSpacing: '0.08em',
+            color: 'var(--color-text)', whiteSpace: 'nowrap', fontFamily: 'var(--font-mono)',
+          }}>
+            HOME<span style={{ color: 'var(--color-cyan)' }}>RADAR</span>
           </span>
         )}
       </div>
 
-      <nav className="flex-1 py-4 px-2 space-y-1 overflow-y-auto">
-        {navItems.map((item) => (
+      {/* Agent status bar */}
+      {sidebarOpen && (
+        <button
+          onClick={sync}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px',
+            borderBottom: '1px solid var(--color-border)', background: 'transparent',
+            cursor: 'pointer', width: '100%',
+          }}
+        >
+          <div style={{ width: 6, height: 6, borderRadius: '50%', background: statusColor, flexShrink: 0 }} />
+          <span style={{ fontSize: 11, color: 'var(--color-muted)', flex: 1, textAlign: 'left' }}>
+            {status === 'online' ? 'Agente ativo' : status === 'connecting' ? 'A ligar…' : 'Agente offline'}
+          </span>
+          <RefreshCw size={11} color="var(--color-muted)" style={status === 'connecting' ? { animation: 'spin 1s linear infinite' } : undefined} />
+        </button>
+      )}
+
+      {/* Nav */}
+      <nav style={{ flex: 1, padding: '8px 6px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {nav.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all relative group ${
-                isActive
-                  ? 'bg-cyan/10 text-cyan'
-                  : 'text-text-secondary hover:text-text-primary hover:bg-white/5'
-              }`
-            }
+            end={item.to === '/'}
+            style={({ isActive }) => ({
+              display: 'flex', alignItems: 'center', gap: 10,
+              padding: '8px 8px', borderRadius: 8, cursor: 'pointer',
+              textDecoration: 'none', position: 'relative',
+              background: isActive ? 'var(--color-cyan-dim)' : 'transparent',
+              color: isActive ? 'var(--color-cyan)' : 'var(--color-muted)',
+              transition: 'all 150ms ease',
+              fontSize: 13, fontWeight: isActive ? 500 : 400,
+              border: isActive ? '1px solid rgba(34,211,238,0.15)' : '1px solid transparent',
+              whiteSpace: 'nowrap',
+            })}
+            onMouseEnter={(e) => {
+              const el = e.currentTarget as HTMLElement
+              if (!el.style.background.includes('cyan')) {
+                el.style.background = 'var(--color-elevated)'
+                el.style.color = 'var(--color-text)'
+              }
+            }}
+            onMouseLeave={(e) => {
+              const el = e.currentTarget as HTMLElement
+              if (!el.style.background.includes('cyan')) {
+                el.style.background = 'transparent'
+                el.style.color = 'var(--color-muted)'
+              }
+            }}
           >
-            <item.icon className="w-5 h-5 flex-shrink-0" />
+            <item.icon size={16} style={{ flexShrink: 0 }} />
             {sidebarOpen && <span>{item.label}</span>}
-            {!sidebarOpen && (
-              <div className="absolute left-14 px-2 py-1 bg-bg-card border border-border rounded text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity">
-                {item.label}
-              </div>
-            )}
-            {item.to === '/alerts' && unreadAlerts > 0 && (
-              <span className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-red text-white text-[10px] flex items-center justify-center font-bold">
-                {unreadAlerts}
+            {item.to === '/alerts' && unread > 0 && (
+              <span style={{
+                marginLeft: 'auto', minWidth: 18, height: 18, borderRadius: 9,
+                background: 'var(--color-red)', color: '#fff',
+                fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                padding: '0 4px',
+              }}>
+                {unread}
               </span>
             )}
           </NavLink>
         ))}
       </nav>
 
+      {/* Collapse toggle */}
       <button
         onClick={toggleSidebar}
-        className="flex items-center justify-center h-12 border-t border-border text-text-muted hover:text-text-primary transition-colors"
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          height: 44, borderTop: '1px solid var(--color-border)',
+          background: 'transparent', cursor: 'pointer', color: 'var(--color-muted)',
+          transition: 'color 150ms',
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-text)')}
+        onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-muted)')}
       >
-        {sidebarOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+        {sidebarOpen ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
       </button>
     </aside>
   )
