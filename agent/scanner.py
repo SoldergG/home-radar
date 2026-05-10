@@ -40,14 +40,32 @@ deco_session = {"stok": None, "seq": 1}
 
 # ── Vendor OUI lookup (primeiros 6 hex da MAC) ──────────────────────────────
 OUI = {
-    "ACDE48": "Apple",   "A4B1C2": "Apple",   "DC56E7": "Apple",
-    "F0DBE2": "Apple",   "3C22FB": "Apple",    "888605": "Apple",
-    "B4F1DA": "Apple",   "E0B9BA": "Samsung",  "8C7712": "Samsung",
-    "F025B7": "Samsung", "001A11": "Google",   "94E2A0": "Amazon",
-    "B0BE76": "TP-Link", "1C3BF3": "TP-Link",  "64D154": "TP-Link",
-    "001D0F": "TP-Link", "50C7BF": "TP-Link",  "ECF4BB": "TP-Link",
-    "C8D3A3": "TP-Link", "30DE4B": "TP-Link",  "D8476B": "Sony",
-    "D4E85E": "Sony",    "702F1B": "Nintendo", "98B6E9": "Nintendo",
+    # Apple
+    "ACDE48": "Apple", "A4B1C2": "Apple", "DC56E7": "Apple", "F0DBE2": "Apple",
+    "3C22FB": "Apple", "888605": "Apple", "B4F1DA": "Apple", "10A1DA": "Apple",
+    "94BE46": "Apple", "2C9C58": "Apple", "A8BE27": "Apple", "3C0754": "Apple",
+    "8866A5": "Apple", "4C57CA": "Apple", "D0817A": "Apple", "78FD94": "Apple",
+    "7C6D62": "Apple", "F023B9": "Apple", "DC2B2A": "Apple", "2C6141": "Apple",
+    # Samsung
+    "E0B9BA": "Samsung", "8C7712": "Samsung", "F025B7": "Samsung",
+    "404E36": "Samsung", "B8192D": "Samsung", "3CA10D": "Samsung",
+    # TP-Link / Deco
+    "3C7895": "TP-Link Deco", "B0BE76": "TP-Link", "1C3BF3": "TP-Link",
+    "64D154": "TP-Link", "001D0F": "TP-Link", "50C7BF": "TP-Link",
+    "ECF4BB": "TP-Link", "C8D3A3": "TP-Link", "30DE4B": "TP-Link",
+    "7440BE": "TP-Link", "80647C": "TP-Link",
+    # Google / Nest
+    "001A11": "Google", "F4F5E8": "Google", "48D6D5": "Google",
+    # Amazon
+    "94E2A0": "Amazon", "F081AF": "Amazon", "FC6520": "Amazon",
+    # Sony
+    "D8476B": "Sony", "D4E85E": "Sony", "10CE9D": "Sony", "001A80": "Sony",
+    # Nintendo
+    "702F1B": "Nintendo", "98B6E9": "Nintendo", "0009BF": "Nintendo",
+    # Microsoft / Xbox
+    "28186D": "Microsoft", "7C1E52": "Microsoft",
+    # NOS / router
+    "000F67": "NOS", "001FC5": "NOS",
 }
 
 def vendor_from_mac(mac: str) -> str:
