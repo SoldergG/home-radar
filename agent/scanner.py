@@ -147,13 +147,16 @@ def deco_get_clients(gw: str) -> list:
         data = r.json()
         clients = []
         for c in data.get("result", {}).get("client_list", []):
+            # "name" = Deco-assigned name (shown in the app), "hostname" = mDNS fallback
+            deco_name = c.get("name", "") or c.get("custom_name", "") or c.get("hostname", "")
             clients.append({
-                "ip":       c.get("ip", ""),
-                "mac":      c.get("mac","").upper(),
-                "hostname": c.get("name","") or c.get("hostname",""),
-                "vendor":   vendor_from_mac(c.get("mac","")),
-                "status":   "online" if c.get("online") else "offline",
-                "signal":   c.get("rssi", -70),
+                "ip":        c.get("ip", ""),
+                "mac":       c.get("mac","").upper(),
+                "hostname":  deco_name,
+                "name":      deco_name,   # used by frontend as display name
+                "vendor":    vendor_from_mac(c.get("mac","")),
+                "status":    "online" if c.get("online") else "offline",
+                "signal":    c.get("rssi", -70),
                 "interface": c.get("connection_type",""),
             })
         print(f"[+] Deco API: {len(clients)} clientes")
@@ -256,23 +259,46 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _cors(self):
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+
     def do_OPTIONS(self):
         self.send_response(204)
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET,OPTIONS")
+        self._cors()
         self.end_headers()
 
     def do_GET(self):
         if self.path == "/scan":
-            self.send_json(scan(self.gw, self.deco_pass))
+            self.send_json(scan(Handler.gw, Handler.deco_pass))
         elif self.path == "/devices":
             with lock: self.send_json(dict(state))
         elif self.path == "/ping":
-            self.send_json({"gateway": self.gw, "ping": ping(self.gw), "timestamp": datetime.now().isoformat()})
+            self.send_json({"gateway": Handler.gw, "ping": ping(Handler.gw), "timestamp": datetime.now().isoformat()})
         elif self.path == "/health":
-            self.send_json({"status": "ok", "lastScan": state.get("lastScan")})
+            self.send_json({"status": "ok", "lastScan": state.get("lastScan"), "gateway": Handler.gw, "decoConfigured": bool(Handler.deco_pass)})
         else:
-            self.send_json({"name":"HomeRadar Agent","version":"2.0","endpoints":["/scan","/devices","/ping","/health"]})
+            self.send_json({"name":"HomeRadar Agent","version":"2.1","endpoints":["/scan","/devices","/ping","/health","/config"]})
+
+    def do_POST(self):
+        if self.path == "/config":
+            length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(length)
+            try:
+                cfg = json.loads(body)
+                if "deco_password" in cfg and cfg["deco_password"]:
+                    Handler.deco_pass = cfg["deco_password"]
+                    deco_session["stok"] = None  # force re-login
+                    print(f"[*] Deco password atualizada via /config")
+                if "gateway" in cfg and cfg["gateway"]:
+                    Handler.gw = cfg["gateway"]
+                    print(f"[*] Gateway atualizado: {Handler.gw}")
+                self.send_json({"ok": True, "decoConfigured": bool(Handler.deco_pass), "gateway": Handler.gw})
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)})
+        else:
+            self.send_response(404); self.end_headers()
 
     def log_message(self, fmt, *args):
         print(f"[API] {args[0]}")

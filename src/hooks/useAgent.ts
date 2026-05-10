@@ -1,104 +1,148 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useStore } from './useStore'
 import type { Device, DeviceType } from '../types'
-
-const AGENT_URL = 'http://localhost:7890'
 
 export type AgentStatus = 'offline' | 'connecting' | 'online'
 
 function guessType(hostname: string, vendor: string): DeviceType {
-  const h = hostname.toLowerCase()
-  const v = vendor.toLowerCase()
-  if (v.includes('apple')) {
-    if (h.includes('iphone')) return 'phone'
-    if (h.includes('ipad')) return 'tablet'
-    if (h.includes('macbook') || h.includes('mac')) return 'laptop'
-    return 'phone'
-  }
-  if (v.includes('samsung')) {
-    if (h.includes('tv') || h.includes('smart')) return 'tv'
-    return 'phone'
-  }
-  if (v.includes('sony')) return 'console'
-  if (v.includes('google')) return 'speaker'
-  if (v.includes('amazon') || v.includes('ring')) return 'camera'
-  if (v.includes('tp-link') || v.includes('deco') || v.includes('tplink')) return 'router'
-  if (h.includes('router') || h.includes('gateway') || h.includes('deco')) return 'router'
-  if (h.includes('tv') || h.includes('television')) return 'tv'
-  if (h.includes('phone') || h.includes('mobile')) return 'phone'
-  if (h.includes('laptop') || h.includes('macbook') || h.includes('pc')) return 'laptop'
-  if (h.includes('ipad') || h.includes('tablet')) return 'tablet'
-  if (h.includes('ps') || h.includes('xbox') || h.includes('playstation')) return 'console'
-  if (h.includes('cam') || h.includes('camera')) return 'camera'
-  if (v.includes('unknown') || v === '') return 'iot'
-  return 'unknown'
+  const h = (hostname + ' ' + vendor).toLowerCase()
+  if (h.includes('iphone') || h.includes('android')) return 'phone'
+  if (h.includes('ipad'))   return 'tablet'
+  if (h.includes('macbook') || h.includes('laptop') || h.includes('pc')) return 'laptop'
+  if (h.includes('tv') || h.includes('television') || h.includes('bravia')) return 'tv'
+  if (h.includes('playstation') || h.includes('xbox') || h.includes('nintendo')) return 'console'
+  if (h.includes('speaker') || h.includes('home') || h.includes('echo') || h.includes('nest')) return 'speaker'
+  if (h.includes('camera') || h.includes('cam') || h.includes('ring')) return 'camera'
+  if (h.includes('deco') || h.includes('router') || h.includes('gateway')) return 'router'
+  if (h.includes('tp-link') && !h.includes('phone')) return 'router'
+  if (vendor.toLowerCase().includes('apple')) return 'phone'  // most Apple devices are iPhones
+  return 'iot'
 }
 
-export function useAgent(intervalMs = 30000) {
+// Assign radar position once per device id
+const radarPositions = new Map<string, { angle: number; dist: number }>()
+function getRadarPos(id: string) {
+  if (!radarPositions.has(id)) {
+    radarPositions.set(id, {
+      angle: Math.random() * 360,
+      dist: Math.random() * 0.55 + 0.2,
+    })
+  }
+  return radarPositions.get(id)!
+}
+
+export function useAgent() {
   const [status, setStatus] = useState<AgentStatus>('offline')
   const [lastSync, setLastSync] = useState<Date | null>(null)
-  const { addDevice, updateDevice, devices } = useStore()
+  const syncingRef = useRef(false)
+
+  const { settings, users, replaceDevices } = useStore()
 
   const sync = useCallback(async () => {
+    if (syncingRef.current) return
+    syncingRef.current = true
     setStatus('connecting')
+
     try {
-      const res = await fetch(`${AGENT_URL}/scan`, { signal: AbortSignal.timeout(8000) })
+      const res = await fetch(`${settings.agentUrl}/scan`, {
+        signal: AbortSignal.timeout(10000),
+      })
       if (!res.ok) throw new Error('bad response')
       const data = await res.json()
       setStatus('online')
       setLastSync(new Date())
 
-      const scanned: Array<{ ip: string; mac: string; hostname: string; vendor: string; status: string }> = data.devices ?? []
+      const scanned: Array<{
+        ip: string; mac: string; hostname: string
+        vendor: string; status: string; name?: string
+      }> = data.devices ?? []
 
-      for (const d of scanned) {
-        const existing = devices.find((x) => x.mac === d.mac.toUpperCase() || x.ip === d.ip)
-        if (existing) {
-          updateDevice(existing.id, {
-            status: 'online',
-            lastSeen: new Date().toISOString(),
-            ip: d.ip,
-          })
-        } else {
-          const type = guessType(d.hostname, d.vendor)
-          const newDevice: Device = {
-            id: `real-${d.mac.replace(/:/g, '')}`,
-            name: d.hostname !== d.ip ? d.hostname.split('.')[0] : `Dispositivo ${d.ip.split('.').pop()}`,
-            type,
-            mac: d.mac.toUpperCase(),
-            ip: d.ip,
-            vendor: d.vendor || 'Desconhecido',
-            status: 'online',
-            signalStrength: Math.floor(Math.random() * 40 + 55),
-            lastSeen: new Date().toISOString(),
-            firstSeen: new Date().toISOString(),
-            uploadSpeed: 0,
-            downloadSpeed: 0,
-            totalUpload: 0,
-            totalDownload: 0,
-            radarAngle: Math.random() * 360,
-            radarDistance: Math.random() * 0.6 + 0.2,
-          }
-          addDevice(newDevice)
-        }
-      }
+      // Filter out multicast/link-local
+      const real = scanned.filter((d) => {
+        const ip = d.ip
+        return !ip.startsWith('169.254') && !ip.startsWith('224.') &&
+               !ip.startsWith('239.') && !ip.startsWith('255.')
+      })
 
-      // Mark missing devices as away
-      for (const d of devices) {
-        const stillOnline = scanned.some((s) => s.mac.toUpperCase() === d.mac || s.ip === d.ip)
-        if (!stillOnline && d.status === 'online') {
-          updateDevice(d.id, { status: 'away', lastSeen: new Date().toISOString() })
+      // Preserve existing user assignments (mac → userId, name overrides)
+      const store = useStore.getState()
+      const existingByMac = new Map(
+        store.devices.map((d) => [d.mac.toUpperCase(), d])
+      )
+
+      const newDevices: Device[] = real.map((d) => {
+        const mac = d.mac.toUpperCase().replace(/-/g, ':')
+        const existing = existingByMac.get(mac)
+        const pos = getRadarPos(mac)
+        const vendor = d.vendor || ''
+        // Prefer Deco-API name > user-set name > vendor+IP fallback
+        const displayName =
+          d.name ||
+          (existing?.userId ? existing.name : null) || // keep user-renamed
+          (vendor && vendor !== 'Desconhecido' ? `${vendor} (${d.ip.split('.').pop()})` : `Dispositivo ${d.ip.split('.').pop()}`)
+
+        return {
+          id: existing?.id ?? `dev-${mac.replace(/:/g, '')}`,
+          name: displayName,
+          type: guessType(d.hostname, vendor),
+          mac,
+          ip: d.ip,
+          vendor,
+          status: 'online' as const,
+          signalStrength: existing?.signalStrength ?? Math.floor(Math.random() * 35 + 55),
+          lastSeen: new Date().toISOString(),
+          firstSeen: existing?.firstSeen ?? new Date().toISOString(),
+          uploadSpeed: existing?.uploadSpeed ?? 0,
+          downloadSpeed: existing?.downloadSpeed ?? 0,
+          totalUpload: existing?.totalUpload ?? 0,
+          totalDownload: existing?.totalDownload ?? 0,
+          userId: existing?.userId,
+          radarAngle: pos.angle,
+          radarDistance: pos.dist,
         }
-      }
+      })
+
+      // Re-attach user assignments that might reference old IDs
+      const fixedDevices = newDevices.map((d) => {
+        if (d.userId) return d
+        // Check if any user has a device with same mac
+        const matchedUserId = users
+          .flatMap((u) => u.devices.map((did) => ({ userId: u.id, did })))
+          .find(({ did }) => {
+            const old = store.devices.find((x) => x.id === did)
+            return old && old.mac.toUpperCase() === d.mac.toUpperCase()
+          })?.userId
+        return matchedUserId ? { ...d, userId: matchedUserId } : d
+      })
+
+      replaceDevices(fixedDevices)
     } catch {
       setStatus('offline')
+    } finally {
+      syncingRef.current = false
     }
-  }, [devices, addDevice, updateDevice])
+  }, [settings.agentUrl, replaceDevices, users])
+
+  // POST new config to running agent whenever settings change
+  const pushConfig = useCallback(async () => {
+    try {
+      await fetch(`${settings.agentUrl}/config`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          deco_password: settings.decoPassword,
+          gateway: settings.gatewayIp,
+        }),
+        signal: AbortSignal.timeout(3000),
+      })
+    } catch { /* agent might not be running yet */ }
+  }, [settings.agentUrl, settings.decoPassword, settings.gatewayIp])
 
   useEffect(() => {
     sync()
-    const id = setInterval(sync, intervalMs)
+    const id = setInterval(sync, settings.scanInterval * 1000)
     return () => clearInterval(id)
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [settings.agentUrl, settings.scanInterval]) // eslint-disable-line
 
-  return { status, lastSync, sync }
+  return { status, lastSync, sync, pushConfig }
 }
