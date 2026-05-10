@@ -118,20 +118,29 @@ def ping(ip: str, timeout=0.8) -> float | None:
 
 # ── TP-Link Deco API ────────────────────────────────────────────────────────
 
+_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+
 def deco_login(gw: str, password: str) -> bool:
     if not HAS_REQUESTS or not password:
         return False
     try:
-        url = f"http://{gw}/cgi-bin/luci/;stok=/login?form=login"
+        url = f"https://{gw}/cgi-bin/luci/;stok=/login?form=login"
         pwd_hash = hashlib.md5(password.encode()).hexdigest().upper()
-        payload = {"method":"do","login":{"password": pwd_hash}}
-        r = requests.post(url, json=payload, timeout=5, verify=False)
+        payload = {"method": "do", "login": {"password": pwd_hash}}
+        headers = {
+            "User-Agent": _UA,
+            "Content-Type": "application/json",
+            "Referer": f"https://{gw}/webpages/index.html",
+            "Accept": "application/json, text/javascript, */*",
+            "X-Requested-With": "XMLHttpRequest",
+        }
+        r = requests.post(url, json=payload, headers=headers, timeout=6, verify=False)
         data = r.json()
         if data.get("error_code") == 0:
             deco_session["stok"] = data["result"]["stok"]
             print(f"[+] Deco login OK ({gw})")
             return True
-        print(f"[!] Deco login falhou: {data}")
+        print(f"[!] Deco login falhou (código {r.status_code}): {data}")
     except Exception as e:
         print(f"[!] Deco API indisponível: {e}")
     return False
@@ -141,9 +150,10 @@ def deco_get_clients(gw: str) -> list:
         return []
     try:
         stok = deco_session["stok"]
-        url = f"http://{gw}/cgi-bin/luci/;stok={stok}/admin/client?form=client_list"
-        payload = {"method":"get","client_list":{}}
-        r = requests.post(url, json=payload, timeout=6, verify=False)
+        url = f"https://{gw}/cgi-bin/luci/;stok={stok}/admin/client?form=client_list"
+        headers = {"User-Agent": _UA, "Referer": f"https://{gw}/webpages/index.html"}
+        payload = {"method": "get", "client_list": {}}
+        r = requests.post(url, json=payload, headers=headers, timeout=8, verify=False)
         data = r.json()
         clients = []
         for c in data.get("result", {}).get("client_list", []):
@@ -271,7 +281,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/scan":
-            self.send_json(scan(Handler.gw, Handler.deco_pass))
+            # Return cached data immediately, trigger background scan
+            with lock:
+                current = dict(state)
+            self.send_json(current)
+            Thread(target=scan, args=(Handler.gw, Handler.deco_pass), daemon=True).start()
         elif self.path == "/devices":
             with lock: self.send_json(dict(state))
         elif self.path == "/ping":

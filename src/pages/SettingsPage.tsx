@@ -77,16 +77,8 @@ export default function SettingsPage() {
     updateSettings(form)
     setSaved(true)
     setTimeout(() => setSaved(false), 2500)
-    // Push new config to agent immediately
-    try {
-      await fetch(`${form.agentUrl}/config`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deco_password: form.decoPassword, gateway: form.gatewayIp }),
-        signal: AbortSignal.timeout(3000),
-      })
-      await sync()
-    } catch { /* agent offline */ }
+    await pushConfig(form.decoPassword, form.gatewayIp)
+    sync()
   }
 
   const testAgent = async () => {
